@@ -1,0 +1,24 @@
+[package]
+name = "proxy"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+env_logger = "0.11.7"
+hickory-proto = "0.25.1"
+serde = { version = "1.0.219", features = ["derive"] }
+thiserror = "2.0.12"
+tokio = { version = "1.44.1", features = ["full"] }
+trust-dns-proto = "0.23.2"
+warp = "0.3.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+console = "0.15"
+chrono = "0.4.40"
+colored = "2.0"
+tokio-postgres = "0.7"
+deadpool-postgres = "0.12"
+native-tls = "0.2"
+async-trait = "0.1.88"
