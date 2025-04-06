@@ -5,33 +5,32 @@ use proxy::dns::cache::{DnsCache, DnsCacheConfig};
 use proxy::utils::{metrics, metrics_channel, logging}; 
 use proxy::utils::logging::LogLevel;
 
-use proxy::{error, info, warn, debug};
-use proxy::utils::logging::init_logging;
+use proxy::{error, info};
 
 
-use deadpool_postgres::{Config, Manager, Pool};
-use tokio_postgres::NoTls;
+// use deadpool_postgres::{Config, Manager, Pool};
+// use tokio_postgres::NoTls;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
 
 
-    // Initialize PostgreSQL connection pool
-    let mut pg_config = Config::new();
-    pg_config.dbname = Some("proxy".to_string());
-    pg_config.user = Some("proxy_user".to_string());
-    pg_config.password = Some("39944816".to_string());
-    pg_config.host = Some("localhost".to_string());
+    // // Initialize PostgreSQL connection pool
+    // let mut pg_config = Config::new();
+    // pg_config.dbname = Some("proxy".to_string());
+    // pg_config.user = Some("proxy_user".to_string());
+    // pg_config.password = Some("39944816".to_string());
+    // pg_config.host = Some("localhost".to_string());
 
-    // connection pool
-    let pool = pg_config.create_pool(None, NoTls).unwrap();
+    // // connection pool
+    // let pool = pg_config.create_pool(None, NoTls).unwrap();
 
-    // Get a client from the pool
-    // Attempt to get a client from the pool
-    match pool.get().await {
-        Ok(_) => info!("✅ Successfully connected to the database!"),
-        Err(e) => eprintln!("❌ Database connection failed: {}", e),
-    }
+    // // Get a client from the pool
+    // // Attempt to get a client from the pool
+    // match pool.get().await {
+    //     Ok(_) => info!("✅ Successfully connected to the database!"),
+    //     Err(e) => eprintln!("❌ Database connection failed: {}", e),
+    // }
 
 
 
@@ -56,7 +55,7 @@ async fn main() -> std::io::Result<()> {
     }
     
     // Start metrics server
-    let metrics_addr: SocketAddr = "127.0.0.1:9091".parse().expect("Invalid metrics address");
+    let metrics_addr: SocketAddr = "0.0.0.0:9091".parse().expect("Invalid metrics address");
     match metrics::start_server(metrics_addr).await {
         Ok(_) => info!("Metrics server started on {}", metrics_addr),
         Err(e) => error!("Failed to start metrics server: {}", e),
@@ -73,7 +72,7 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Set local address for the DNS proxy to bind to
-    let local_addr: SocketAddr = "127.0.0.1:2053".parse().expect("Invalid socket address");
+    let local_addr: SocketAddr = "0.0.0.0:2053".parse().expect("Invalid socket address");
 
     // Create a configuration with stricter rate limits for testing
     let config = ProxyConfig {

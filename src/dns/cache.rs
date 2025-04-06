@@ -4,10 +4,9 @@ use std::sync::Arc;
 use thiserror::Error;
 use hickory_proto::op::Message;
 use hickory_proto::rr::RecordType;
-use warp::filters::trace::request;
 
 use crate::utils::metrics_channel::{self, increment_counter};
-use crate::{error, info, warn, debug};
+use crate::{error, info, debug};
 
 
 /// Error that may occur during caching operations

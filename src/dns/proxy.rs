@@ -9,7 +9,8 @@ use tokio::net::UdpSocket as TokioUdpSocket;
 
 use crate::dns::cache::DnsCache;
 use crate::utils::metrics_channel::{self, increment_counter};
-use crate::{error, info, warn, debug};
+use crate::{error, info, warn};
+use crate::models::client::ClientInfo;
 
 
 
@@ -297,6 +298,20 @@ impl DnsProxy {
             // Security chcheck
             Self::security_check(&request, client_addr)?;
 
+            
+
+            let client_info = ClientInfo::from_addr(client_addr);
+
+            // Log client info
+            println!("🛰️  Incoming DNS request from:");
+            println!("   - IP Address     : {}", client_info.ip_addr);
+            println!("   - Port           : {}", client_info.port);
+            println!("   - MAC Address    : {}", client_info.mac_address.as_deref().unwrap_or("Unknown"));
+            println!("   - Hostname       : {}", client_info.hostname.as_deref().unwrap_or("Unknown"));
+            println!("   - Group ID       : {}", client_info.group_id.as_deref().unwrap_or("Unknown"));
+            println!("   - Friendly Name  : {}", client_info.friendly_name.as_deref().unwrap_or("Unnamed"));
+            
+
             // Check if there are questions to process
             if request.queries().is_empty() {
                 return Err(ProxyError::InvalidRequest);
@@ -345,7 +360,7 @@ impl DnsProxy {
             if Self::is_cacheable(&response) {
                 let ttl = Self::get_min_ttl(&response);
                 let mut cache_writer = cache.write().expect("Failed to acquire write lock");
-                cache_writer.insert(&query_name, question.query_type(), response.clone(), ttl);
+                let _ = cache_writer.insert(&query_name, question.query_type(), response.clone(), ttl);
                 increment_counter("dns.cache.insert");
             }
 

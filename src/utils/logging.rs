@@ -163,7 +163,7 @@ impl Logger {
 
 /// Global logger
 static LOGGER_INITIALIZED: AtomicBool = AtomicBool::new(false);
-static INIT: Once = Once::new();
+// static INIT: Once = Once::new();
 static mut LOGGER: Option<Arc<Mutex<Logger>>> = None;
 
 pub async fn init_logging(level: LogLevel, log_file: Option<&str>, stdout: bool, timestamps: bool) -> LogResult<()> {
