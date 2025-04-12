@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, RwLock};
 use proxy::dns::proxy::{DnsProxy, ProxyConfig};
 use proxy::dns::cache::{DnsCache, DnsCacheConfig};
+use proxy::filter::engine::SimpleFilterEngine;
 use proxy::utils::{metrics, metrics_channel, logging}; 
 use proxy::utils::logging::LogLevel;
 
@@ -13,26 +14,6 @@ use proxy::{error, info};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-
-
-    // // Initialize PostgreSQL connection pool
-    // let mut pg_config = Config::new();
-    // pg_config.dbname = Some("proxy".to_string());
-    // pg_config.user = Some("proxy_user".to_string());
-    // pg_config.password = Some("39944816".to_string());
-    // pg_config.host = Some("localhost".to_string());
-
-    // // connection pool
-    // let pool = pg_config.create_pool(None, NoTls).unwrap();
-
-    // // Get a client from the pool
-    // // Attempt to get a client from the pool
-    // match pool.get().await {
-    //     Ok(_) => info!("✅ Successfully connected to the database!"),
-    //     Err(e) => eprintln!("❌ Database connection failed: {}", e),
-    // }
-
-
 
     // Initialize custom logger first
     if let Err(e) = logging::init_logging(LogLevel::Debug, Some("dns_proxy.log"), true, true).await {
@@ -55,7 +36,7 @@ async fn main() -> std::io::Result<()> {
     }
     
     // Start metrics server
-    let metrics_addr: SocketAddr = "0.0.0.0:9091".parse().expect("Invalid metrics address");
+    let metrics_addr: SocketAddr = "127.0.0.1:9091".parse().expect("Invalid metrics address");
     match metrics::start_server(metrics_addr).await {
         Ok(_) => info!("Metrics server started on {}", metrics_addr),
         Err(e) => error!("Failed to start metrics server: {}", e),
@@ -72,7 +53,7 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Set local address for the DNS proxy to bind to
-    let local_addr: SocketAddr = "0.0.0.0:2053".parse().expect("Invalid socket address");
+    let local_addr: SocketAddr = "127.0.0.1:2053".parse().expect("Invalid socket address");
 
     // Create a configuration with stricter rate limits for testing
     let config = ProxyConfig {
@@ -99,8 +80,13 @@ async fn main() -> std::io::Result<()> {
         cache_config.max_ttl
     );
 
+    let filter_engine = Arc::new(SimpleFilterEngine::new(
+        SimpleFilterEngine::create_family_profile(),
+        3600
+    ));
+
     // Initialize the DNS Proxy with the cache
-    match DnsProxy::new(local_addr, config, cache.clone()).await {
+    match DnsProxy::new(local_addr, config, cache.clone(), filter_engine).await {
         Ok(proxy) => {
             info!("DNS proxy initialized successfully");
             
@@ -125,24 +111,24 @@ async fn main() -> std::io::Result<()> {
 
 /// Print formatted testing instructions
 fn print_testing_instructions() {
-    // println!("\n{}", "═".repeat(80));
-    // println!("{}  DNS PROXY TESTING INSTRUCTIONS  {}", "═".repeat(24), "═".repeat(24));
-    // println!("{}", "═".repeat(80));
+    println!("\n{}", "═".repeat(80));
+    println!("{}  DNS PROXY TESTING INSTRUCTIONS  {}", "═".repeat(24), "═".repeat(24));
+    println!("{}", "═".repeat(80));
     
-    // println!("\n📋 {} Test rate limiting:", console::style("1.").cyan().bold());
-    // println!("  $ for i in {{1..10}}; do dig @127.0.0.1 -p 2053 example.com; echo \"Request $i complete\"; done");
+    println!("\n📋 {} Test rate limiting:", console::style("1.").cyan().bold());
+    println!("  $ for i in {{1..10}}; do dig @127.0.0.1 -p 2053 example.com; echo \"Request $i complete\"; done");
     
-    // println!("\n📋 {} Test caching (run multiple times to see cache hits):", console::style("2.").cyan().bold());
-    // println!("  $ dig @127.0.0.1 -p 2053 example.com");
-    // println!("  $ dig @127.0.0.1 -p 2053 +nocache example.com  # Bypass cache");
+    println!("\n📋 {} Test caching (run multiple times to see cache hits):", console::style("2.").cyan().bold());
+    println!("  $ dig @127.0.0.1 -p 2053 example.com");
+    println!("  $ dig @127.0.0.1 -p 2053 +nocache example.com  # Bypass cache");
     
-    // println!("\n📋 {} Test multiple domains with timing to see cache effect:", console::style("3.").cyan().bold());
-    // println!("  $ time dig @127.0.0.1 -p 2053 google.com");
-    // println!("  $ time dig @127.0.0.1 -p 2053 google.com  # Should be faster");
+    println!("\n📋 {} Test multiple domains with timing to see cache effect:", console::style("3.").cyan().bold());
+    println!("  $ time dig @127.0.0.1 -p 2053 google.com");
+    println!("  $ time dig @127.0.0.1 -p 2053 google.com  # Should be faster");
     
-    // println!("\n📋 {} Compare cached vs uncached responses:", console::style("4.").cyan().bold());
-    // println!("  $ dig @127.0.0.1 -p 2053 +noall +answer +ttl example.com");
-    // println!("  $ dig @127.0.0.1 -p 2053 +noall +answer +ttl example.com  # TTL should decrease");
+    println!("\n📋 {} Compare cached vs uncached responses:", console::style("4.").cyan().bold());
+    println!("  $ dig @127.0.0.1 -p 2053 +noall +answer +ttl example.com");
+    println!("  $ dig @127.0.0.1 -p 2053 +noall +answer +ttl example.com  # TTL should decrease");
     
     println!("\n{}", "═".repeat(80));
     println!("{}  METRICS AVAILABLE AT: http://127.0.0.1:9091/metrics  {}", "═".repeat(15), "═".repeat(15));

@@ -1,12 +1,16 @@
+/// Main Logging module written by Samwuel Simiyu
+/// 
+
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Once, Arc};
+use std::sync::Arc;
 use thiserror::Error;
 use chrono::Local;
 use tokio::sync::Mutex;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::AsyncWriteExt;
 use colored::*;
+use once_cell::sync::OnceCell;
 
 /// Logging errors
 #[derive(Error, Debug)]
@@ -161,10 +165,9 @@ impl Logger {
 }
 
 
-/// Global logger
+/// Global logger instance using OnceCell
+static GLOBAL_LOGGER: OnceCell<Mutex<Logger>> = OnceCell::new();
 static LOGGER_INITIALIZED: AtomicBool = AtomicBool::new(false);
-// static INIT: Once = Once::new();
-static mut LOGGER: Option<Arc<Mutex<Logger>>> = None;
 
 pub async fn init_logging(level: LogLevel, log_file: Option<&str>, stdout: bool, timestamps: bool) -> LogResult<()> {
     // Reset the flag if needed for reinitialization during tests
@@ -176,11 +179,11 @@ pub async fn init_logging(level: LogLevel, log_file: Option<&str>, stdout: bool,
 
     let logger = Logger::new(level, log_file, stdout, timestamps).await?;
     
-    unsafe {
-        // Replace the Once pattern with a simpler approach
-        LOGGER = Some(Arc::new(Mutex::new(logger)));
-        LOGGER_INITIALIZED.store(true, Ordering::SeqCst);
+    if GLOBAL_LOGGER.set(Mutex::new(logger)).is_err() {
+        return Err(LogError::InitError("Logger already initialized".to_string()));
     }
+
+    LOGGER_INITIALIZED.store(true, Ordering::SeqCst);
 
     Ok(())
 }
@@ -193,17 +196,16 @@ pub async fn init_from_config(level_str: &str, log_file: Option<&str>) -> LogRes
 }
 
 /// Set the current log level
-pub async fn set_level(level: LogLevel) -> LogResult<()> {
+pub async fn set_level(_level: LogLevel) -> LogResult<()> {
     if !LOGGER_INITIALIZED.load(Ordering::SeqCst) {
         return Err(LogError::InitError("Logger not initialized".to_string()));
     }
-    
-    unsafe {
-        if let Some(logger) = &LOGGER {
-            let mut guard = logger.lock().await;
-            guard.level = level;
-        }
+
+    if let Some(logger) = GLOBAL_LOGGER.get() {
+        let guard = logger.lock().await;
+        guard.level;
     }
+    
     
     Ok(())
 }
@@ -222,11 +224,9 @@ pub async fn log_internal(level: LogLevel, message: &str, module: &str) -> LogRe
         return Ok(());
     }
     
-    unsafe {
-        if let Some(logger) = &LOGGER {
-            let guard = logger.lock().await;
-            guard.log(level, message, module).await?;
-        }
+    if let Some(logger) = GLOBAL_LOGGER.get() {
+        let guard = logger.lock().await;
+        guard.log(level, message, module).await?;
     }
     
     Ok(())

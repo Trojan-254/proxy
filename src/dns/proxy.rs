@@ -1,3 +1,16 @@
+/// This module implements a DNS proxy server that forwards requests to upstream DNS servers.
+/// It includes rate limiting, caching, and filtering capabilities.
+/// It uses the hickory_proto library for DNS message parsing and construction.
+/// It also uses the tokio library for asynchronous I/O operations.
+/// It is designed to be efficient and secure, with various checks in place to prevent abuse and misuse.
+/// It is intended to be used as part of a larger DNS filtering and security solution.
+/// It is not a complete DNS server, but rather a component that can be used in conjunction with other components to provide a full DNS solution.
+/// It is designed to be extensible and configurable, allowing for easy integration with other systems and services.
+/// It is also designed to be easy to use and understand, with clear error handling and logging capabilities.
+/// It is intended to be used by developers and system administrators who need a flexible and powerful DNS proxy solution.
+/// WRITTEN BY: SAMWUEL SIMIYU
+/// ON 12th April 2025
+
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::{Arc, RwLock};
@@ -7,10 +20,12 @@ use thiserror::Error;
 use tokio::net::UdpSocket as TokioUdpSocket;
 // use tokio::time::timeout;
 
+use crate::filter::engine::{
+    SimpleFilterEngine,
+};
 use crate::dns::cache::DnsCache;
 use crate::utils::metrics_channel::{self, increment_counter};
 use crate::{error, info, warn};
-use crate::models::client::ClientInfo;
 
 
 
@@ -140,13 +155,15 @@ pub struct DnsProxy {
     rate_limiter: Arc<RwLock<RateLimiter>>,
     config: ProxyConfig,
     cache: Arc<RwLock<DnsCache>>,
+    filter_engine: Arc<SimpleFilterEngine>,
 }
 
 impl DnsProxy {
     pub async fn new(
         bind_addr: SocketAddr,
         config: ProxyConfig,
-        cache: Arc<RwLock<DnsCache>>
+        cache: Arc<RwLock<DnsCache>>,
+        filter_engine: Arc<SimpleFilterEngine>,
     ) -> ProxyResult<Self> {
         let socket = TokioUdpSocket::bind(bind_addr).await?;
         let buffer_size = if cfg!(target_os = "linux") {
@@ -165,6 +182,7 @@ impl DnsProxy {
             config,
             rate_limiter,
             cache,
+            filter_engine,
         })
     }
 
@@ -218,6 +236,7 @@ impl DnsProxy {
                         let cache = self.cache.clone();
                         let rate_limiter = self.rate_limiter.clone();
                         let request_data = recv_buffer[..size].to_vec();
+                        let filter_engine = self.filter_engine.clone();
 
                         // Process a request ina separeta task
                         tokio::spawn(async move {
@@ -231,6 +250,7 @@ impl DnsProxy {
                                 &config,
                                 &cache,
                                 &rate_limiter,
+                                &filter_engine,
                             ).await {
                                 Ok(_) => {
                                     if cfg!(debug_assertions) {
@@ -271,7 +291,8 @@ impl DnsProxy {
             client_addr: SocketAddr,
             config: &ProxyConfig,
             cache: &Arc<RwLock<DnsCache>>,
-            rate_limiter: &Arc<RwLock<RateLimiter>>
+            rate_limiter: &Arc<RwLock<RateLimiter>>,
+            filter_engine: &Arc<SimpleFilterEngine>,
         ) -> ProxyResult<()> {
             // We start timing the entire request
             let request_timer = metrics_channel::start_timer("dns.request.duration");
@@ -298,19 +319,7 @@ impl DnsProxy {
             // Security chcheck
             Self::security_check(&request, client_addr)?;
 
-            
-
-            let client_info = ClientInfo::from_addr(client_addr);
-
-            // Log client info
-            println!("🛰️  Incoming DNS request from:");
-            println!("   - IP Address     : {}", client_info.ip_addr);
-            println!("   - Port           : {}", client_info.port);
-            println!("   - MAC Address    : {}", client_info.mac_address.as_deref().unwrap_or("Unknown"));
-            println!("   - Hostname       : {}", client_info.hostname.as_deref().unwrap_or("Unknown"));
-            println!("   - Group ID       : {}", client_info.group_id.as_deref().unwrap_or("Unknown"));
-            println!("   - Friendly Name  : {}", client_info.friendly_name.as_deref().unwrap_or("Unnamed"));
-            
+    
 
             // Check if there are questions to process
             if request.queries().is_empty() {
@@ -324,6 +333,28 @@ impl DnsProxy {
             if cfg!(debug_assertions) {
                 info!("Processing query for {} (type: {:?}) from {}", 
                          query_name, question.query_type(), client_addr);
+            }
+
+            // Check if the query is blocked by the filter engine
+            let filter_result = filter_engine.check_domain(&query_name);
+
+            // Check if the domain is blocked
+            if !filter_result.is_allowed {
+                info!("Domain {} blocked {}", query_name, filter_result.reason);
+
+                // create a blocked response
+                let response = Self::create_blocked_response(&request, &filter_result.reason);
+                let response_data = response.to_vec()?;
+                socket.send_to(&response_data, client_addr).await?;
+                let bytes_send =                 socket.send_to(&response_data, client_addr).await?;
+
+                increment_counter("dns.requests.blocked");
+                info!("sent {} bytes to client {}", bytes_send, client_addr);
+                println!("Bytes sent: {:?}", bytes_send);
+                info!("Blocked domain {} for client {} (reason: {})", 
+                  query_name, client_addr, filter_result.reason);
+
+                return Ok(());
             }
 
             // Try to get domain from cache
@@ -387,6 +418,30 @@ impl DnsProxy {
             .map(|record| record.ttl())
             .min()
             .unwrap_or(300)
+        }
+
+        /// Create a blocked response
+        fn create_blocked_response(
+            request: &Message,
+            _reason: &str
+        ) -> Message {
+            let mut response = Message::new();
+            response.set_id(request.id());
+
+            let mut header = Header::new();
+            header.set_message_type(MessageType::Response);
+            header.set_op_code(request.op_code());
+            header.set_response_code(ResponseCode::NXDomain);
+            header.set_recursion_desired(request.recursion_desired());
+            header.set_recursion_available(true);
+            response.set_header(header);
+
+            // Copy the queries from the request
+            for query in request.queries() {
+                response.add_query(query.clone());
+            }
+
+            response
         }
 
         async fn send_error_response (
