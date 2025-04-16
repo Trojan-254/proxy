@@ -1,29 +1,23 @@
+/// This is the main entry point to the server. written by Samwuel Simiyu.
+
 use std::net::SocketAddr;
 use std::sync::{Arc, RwLock};
 use proxy::dns::proxy::{DnsProxy, ProxyConfig};
 use proxy::dns::cache::{DnsCache, DnsCacheConfig};
-use proxy::filter::engine::SimpleFilterEngine;
+use proxy::filter::engine::EnhancedFilterEngine;
 use proxy::utils::{metrics, metrics_channel, logging}; 
 use proxy::utils::logging::LogLevel;
-
 use proxy::{error, info};
-
-
-// use deadpool_postgres::{Config, Manager, Pool};
-// use tokio_postgres::NoTls;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-
+    dotenv::dotenv().ok();
     // Initialize custom logger first
     if let Err(e) = logging::init_logging(LogLevel::Debug, Some("dns_proxy.log"), true, true).await {
         println!("Failed to initialize custom logger: {}", e);
-        // If you want to return this error, convert it:
-        // return Err(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()));
     } else {
         info!("Custom logger initialized successfully");
     }
-    
     
     // Initialize metrics system - capture the registry
     let _metrics_registry = metrics::init(true);
@@ -58,12 +52,33 @@ async fn main() -> std::io::Result<()> {
     // Create a configuration with stricter rate limits for testing
     let config = ProxyConfig {
         upstream_servers: vec![
+             // Google DNS
             "8.8.8.8:53".parse().unwrap(),
             "8.8.4.4:53".parse().unwrap(),
+
+            // Cloudflare DNS
+            "1.1.1.1:53".parse().unwrap(),
+            "1.0.0.1:53".parse().unwrap(),
+
+            // Quad9 DNS
+            "9.9.9.9:53".parse().unwrap(),
+            "149.112.112.112:53".parse().unwrap(),
+
+            // OpenDNS
+            "208.67.222.222:53".parse().unwrap(),
+            "208.67.220.220:53".parse().unwrap(),
+
+            // CleanBrowsing (Family Filter)
+            "185.228.168.168:53".parse().unwrap(),
+            "185.228.169.168:53".parse().unwrap(),
+
+            // AdGuard (Family Protection)
+            "94.140.14.15:53".parse().unwrap(),
+            "94.140.15.16:53".parse().unwrap(),
         ],
         upstream_timeout_ms: 2000,
-        rate_limit_window_secs: 100,  // 100-second window
-        rate_limit_max_requests: 1000,   // 1000 requests per 100 seconds
+        rate_limit_window_secs: 1000000,  // 100-second window
+        rate_limit_max_requests: 1000000,   // 1000 requests per 100 seconds
     };
 
     // Initialize the DNS cache with default configuration
@@ -80,11 +95,23 @@ async fn main() -> std::io::Result<()> {
         cache_config.max_ttl
     );
 
-    let filter_engine = Arc::new(SimpleFilterEngine::new(
-        SimpleFilterEngine::create_family_profile(),
-        3600
-    ));
-
+    // Initialize the filter engine - we need to use a trait object to handle both engine types
+    let filter_engine = match EnhancedFilterEngine::from_json("filter_config.json") {
+        Ok(engine) => {
+            info!("Enhanced filter engine initialized successfully from filter_config.json");
+            
+            // Get stats from the enhanced engine
+            let stats = engine.get_stats();
+            info!("Filter engine stats: {:#?}", stats);
+            
+            Arc::new(engine)
+        }
+        Err(e) => {
+            error!("Failed to initialize enhanced filter engine: {}", e);
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to initialize filter engine"));
+        }
+    };
+    
     // Initialize the DNS Proxy with the cache
     match DnsProxy::new(local_addr, config, cache.clone(), filter_engine).await {
         Ok(proxy) => {
@@ -103,8 +130,6 @@ async fn main() -> std::io::Result<()> {
             error!("Failed to initialize DNS proxy: {}", e);
         }
     }
-
-    
 
     Ok(())
 }
@@ -129,6 +154,11 @@ fn print_testing_instructions() {
     println!("\n📋 {} Compare cached vs uncached responses:", console::style("4.").cyan().bold());
     println!("  $ dig @127.0.0.1 -p 2053 +noall +answer +ttl example.com");
     println!("  $ dig @127.0.0.1 -p 2053 +noall +answer +ttl example.com  # TTL should decrease");
+    
+    println!("\n📋 {} Test domain filtering:", console::style("5.").cyan().bold());
+    println!("  $ dig @127.0.0.1 -p 2053 facebook.com  # Should be blocked during school hours (M-F, 8AM-3PM)");
+    println!("  $ dig @127.0.0.1 -p 2053 pornhub.com   # Should be blocked (adult category)");
+    println!("  $ dig @127.0.0.1 -p 2053 google.com    # Should be allowed");
     
     println!("\n{}", "═".repeat(80));
     println!("{}  METRICS AVAILABLE AT: http://127.0.0.1:9091/metrics  {}", "═".repeat(15), "═".repeat(15));

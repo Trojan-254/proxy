@@ -8,6 +8,7 @@ use serde::Serialize;
 use warp::Filter;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use crate::info;
 
 /// Metrics errors
 #[derive(Error, Debug)]
@@ -340,7 +341,7 @@ pub async fn start_server(addr: SocketAddr) -> MetricsResult<()> {
     let routes = metrics_route.or(health_route);
     
     // Start the server
-    println!("Starting metrics server on {}", addr);
+    info!("Starting metrics server on {}", addr);
     tokio::spawn(async move {
         warp::serve(routes).run(addr).await;
     });
@@ -412,6 +413,7 @@ pub async fn register_dns_metrics() -> MetricsResult<()> {
     // Register counters
     registry.register_counter("dns.requests.total", "Total number of DNS requests received").await;
     registry.register_counter("dns.requests.success", "Number of successful DNS responses").await;
+    registry.register_counter("dns.requests.blocked", "Number of successful DNS responses").await;
     registry.register_counter("dns.requests.error", "Number of failed DNS requests").await;
     registry.register_counter("dns.requests.timeout", "Number of timed out DNS requests").await;
     registry.register_counter("dns.cache.hits", "Number of DNS cache hits").await;

@@ -1,0 +1,207 @@
+{
+  "profiles": [
+    {
+      "name": "Family",
+      "description": "Default family profile with parental controls",
+      "is_active": true,
+      "blocked_categories": [
+        "adult",
+        "gambling",
+        "malware",
+        "phishing"
+      ],
+      "rules": [
+        {
+          "id": 1,
+          "description": "Block social media during school hours",
+          "enabled": true,
+          "priority": 10,
+          "action": "block",
+          "categories": [
+            "social_media"
+          ],
+          "exact_domains": [],
+          "domain_patterns": [],
+          "time_restrictions": [
+            {
+              "days": [1, 2, 3, 4, 5],
+              "start_time": 28800,
+              "end_time": 54000
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "description": "Always allow educational websites",
+          "enabled": true,
+          "priority": 5,
+          "action": "allow",
+          "categories": [],
+          "exact_domains": [
+            "wikipedia.org",
+            "khanacademy.org",
+            "coursera.org",
+            "edx.org"
+          ],
+          "domain_patterns": [
+            "*.edu",
+            "*.gov"
+          ],
+          "time_restrictions": []
+        }
+      ]
+    },
+    {
+      "name": "Work",
+      "description": "Profile for work environments",
+      "is_active": false,
+      "blocked_categories": [
+        "adult",
+        "gambling",
+        "gaming",
+        "social_media"
+      ],
+      "rules": [
+        {
+          "id": 1,
+          "description": "Allow LinkedIn anytime",
+          "enabled": true,
+          "priority": 5,
+          "action": "allow",
+          "categories": [],
+          "exact_domains": [
+            "linkedin.com",
+            "linkedin.net"
+          ],
+          "domain_patterns": [],
+          "time_restrictions": []
+        },
+        {
+          "id": 2,
+          "description": "Allow social media during lunch hour",
+          "enabled": true,
+          "priority": 10,
+          "action": "allow",
+          "categories": [
+            "social_media"
+          ],
+          "exact_domains": [],
+          "domain_patterns": [],
+          "time_restrictions": [
+            {
+              "days": [1, 2, 3, 4, 5],
+              "start_time": 43200,
+              "end_time": 46800
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "custom_domains": [
+    {
+      "domain": "facebook.com",
+      "category": "social_media"
+    },
+    {
+      "domain": "twitter.com", 
+      "category": "social_media"
+    },
+    {
+      "domain": "instagram.com",
+      "category": "social_media"
+    },
+    {
+      "domain": "tiktok.com",
+      "category": "social_media"
+    },
+    {
+      "domain": "linkedin.com",
+      "category": "social_media"
+    },
+    {
+      "domain": "pornhub.com",
+      "category": "adult"
+    },
+    {
+      "domain": "xvideos.com",
+      "category": "adult"
+    },
+    {
+      "domain": "bet365.com",
+      "category": "gambling"
+    },
+    {
+      "domain": "pokerstars.com",
+      "category": "gambling"
+    },
+    {
+      "domain": "minecraft.net",
+      "category": "gaming"
+    },
+    {
+      "domain": "roblox.com",
+      "category": "gaming"
+    },
+    {
+      "domain": "epicgames.com",
+      "category": "gaming"
+    }
+  ],
+  "custom_patterns": [
+    {
+      "pattern": "*porn*",
+      "category": "adult"
+    },
+    {
+      "pattern": "*xxx*",
+      "category": "adult"
+    },
+    {
+      "pattern": "*adult*",
+      "category": "adult"
+    },
+    {
+      "pattern": "*bet*",
+      "category": "gambling"
+    },
+    {
+      "pattern": "*casino*",
+      "category": "gambling"
+    },
+    {
+      "pattern": "*gambling*",
+      "category": "gambling"
+    },
+    {
+      "pattern": "*.malware.*",
+      "category": "malware"
+    },
+    {
+      "pattern": "*phish*",
+      "category": "phishing"
+    },
+    {
+      "pattern": "*game*",
+      "category": "gaming"
+    },
+    {
+      "pattern": "*.gaming.*",
+      "category": "gaming"
+    },
+    {
+      "pattern": "*.ad.*",
+      "category": "advertising"
+    },
+    {
+      "pattern": "*ad-*",
+      "category": "advertising"
+    }
+  ],
+  "preferences": {
+    "cache_ttl_seconds": 3600,
+    "enable_logging": true,
+    "show_block_notifications": true,
+    "auto_refresh_interval": 300
+  }
+}

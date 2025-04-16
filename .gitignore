@@ -1,1 +1,3 @@
 /target
+dns_proxy.log
+.env

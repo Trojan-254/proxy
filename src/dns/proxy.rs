@@ -20,9 +20,7 @@ use thiserror::Error;
 use tokio::net::UdpSocket as TokioUdpSocket;
 // use tokio::time::timeout;
 
-use crate::filter::engine::{
-    SimpleFilterEngine,
-};
+use crate::filter::engine::{EnhancedFilterEngine};
 use crate::dns::cache::DnsCache;
 use crate::utils::metrics_channel::{self, increment_counter};
 use crate::{error, info, warn};
@@ -155,7 +153,7 @@ pub struct DnsProxy {
     rate_limiter: Arc<RwLock<RateLimiter>>,
     config: ProxyConfig,
     cache: Arc<RwLock<DnsCache>>,
-    filter_engine: Arc<SimpleFilterEngine>,
+    filter_engine: Arc<EnhancedFilterEngine>,
 }
 
 impl DnsProxy {
@@ -163,7 +161,7 @@ impl DnsProxy {
         bind_addr: SocketAddr,
         config: ProxyConfig,
         cache: Arc<RwLock<DnsCache>>,
-        filter_engine: Arc<SimpleFilterEngine>,
+        filter_engine: Arc<EnhancedFilterEngine>,
     ) -> ProxyResult<Self> {
         let socket = TokioUdpSocket::bind(bind_addr).await?;
         let buffer_size = if cfg!(target_os = "linux") {
@@ -292,7 +290,7 @@ impl DnsProxy {
             config: &ProxyConfig,
             cache: &Arc<RwLock<DnsCache>>,
             rate_limiter: &Arc<RwLock<RateLimiter>>,
-            filter_engine: &Arc<SimpleFilterEngine>,
+            filter_engine: &Arc<EnhancedFilterEngine>,
         ) -> ProxyResult<()> {
             // We start timing the entire request
             let request_timer = metrics_channel::start_timer("dns.request.duration");
@@ -319,8 +317,6 @@ impl DnsProxy {
             // Security chcheck
             Self::security_check(&request, client_addr)?;
 
-    
-
             // Check if there are questions to process
             if request.queries().is_empty() {
                 return Err(ProxyError::InvalidRequest);
@@ -343,15 +339,15 @@ impl DnsProxy {
                 info!("Domain {} blocked {}", query_name, filter_result.reason);
 
                 // create a blocked response
-                let response = Self::create_blocked_response(&request, &filter_result.reason);
+                let mut response = Self::create_blocked_response(&request, &filter_result.reason);
+                response.set_id(request.id());
                 let response_data = response.to_vec()?;
-                socket.send_to(&response_data, client_addr).await?;
-                let bytes_send =                 socket.send_to(&response_data, client_addr).await?;
+                let bytes_send = socket.send_to(&response_data, client_addr).await?;
 
                 increment_counter("dns.requests.blocked");
                 info!("sent {} bytes to client {}", bytes_send, client_addr);
                 println!("Bytes sent: {:?}", bytes_send);
-                info!("Blocked domain {} for client {} (reason: {})", 
+                info!("Blocked domain {} for client {} ([reason: {}])", 
                   query_name, client_addr, filter_result.reason);
 
                 return Ok(());

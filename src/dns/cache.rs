@@ -43,7 +43,7 @@ struct CacheEntry {
 }
 
 impl CacheEntry {
-    /// Create a new cache entry
+    /// Creates a new cache entry
     fn new(response: Message, ttl: u32) -> Self {
         // Approximate size calculations:
         // - fixed overhead for the struct
